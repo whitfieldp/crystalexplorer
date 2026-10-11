@@ -67,6 +67,13 @@ FileFormat fileFormatFromFilename(const QString &filename);
 QString programName(Program);
 Program programFromName(const QString &programString);
 
+// Parse a "method/basis" description (as produced by
+// MolecularWavefunction::description()) back into method and basis strings.
+// Sets method to the part before the last '/' and basis to the part after it.
+// Returns true if a method was extracted; basis may be empty.
+bool methodBasisFromDescription(const QString &description,
+                                QString &method, QString &basis);
+
 } // namespace wfn
 
 Q_DECLARE_METATYPE(wfn::Parameters)

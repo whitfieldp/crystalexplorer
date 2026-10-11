@@ -87,4 +87,23 @@ Program programFromName(const QString &name) {
 
 bool Parameters::isXtbMethod() const { return xtb::isXtbMethod(method); }
 
+bool methodBasisFromDescription(const QString &description,
+                                QString &method, QString &basis) {
+  const QString trimmed = description.trimmed();
+  if (trimmed.isEmpty())
+    return false;
+
+  const int slash = trimmed.lastIndexOf('/');
+  if (slash <= 0 || slash == trimmed.size() - 1) {
+    // No usable separator: treat the whole string as the method.
+    method = trimmed;
+    basis.clear();
+    return true;
+  }
+
+  method = trimmed.left(slash).trimmed();
+  basis = trimmed.mid(slash + 1).trimmed();
+  return !method.isEmpty();
+}
+
 } // namespace wfn

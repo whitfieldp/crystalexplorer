@@ -189,6 +189,22 @@ QString EnergyCalculationDialog::selectedEnergyModel() const {
 
 void EnergyCalculationDialog::validate() {
 
+  // If the user selected an existing wavefunction, use that wavefunction's
+  // actual method/basis for the request so the downstream
+  // "do I already have this wavefunction?" match succeeds and no
+  // unnecessary new wavefunction is generated.
+  if (wavefunctionCombobox->currentIndex() != 0) {
+    QString selMethod, selBasis;
+    wfn::methodBasisFromDescription(wavefunctionCombobox->currentText(),
+                                    selMethod, selBasis);
+    for (auto &wfn : m_requiredWavefunctions) {
+      if (!selMethod.isEmpty())
+        wfn.method = selMethod;
+      if (!selBasis.isEmpty())
+        wfn.basis = selBasis;
+    }
+  }
+
   if (methodIsDefined() || wavefunctionCombobox->currentIndex() != 0) {
     for (auto &wfn : m_requiredWavefunctions) {
       wfn.accepted = true;
