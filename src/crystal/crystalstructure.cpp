@@ -1522,6 +1522,13 @@ bool CrystalStructure::getTransformation(
     // with the smallest minimum-image separation) and must then be
     // consistent for every atom. Using the best pair rather than atom 0
     // makes this robust to atom permutation and to fragments spanning cells.
+    //
+    // The best-pair *search* uses minimum-image distances so that equivalent
+    // atoms a whole cell apart still match. But the translation itself must
+    // be the RAW (unwrapped) difference for that pair: the wavefunction is
+    // written at its original asymmetric-unit position and OCC applies this
+    // translation to place it, so we need the actual cell offset (which can
+    // be several lattice vectors away), not its minimum-image representative.
     double best_pair = 1e30;
     int bi = 0, bj = 0;
     for (int i = 0; i < n; i++)
@@ -1533,8 +1540,7 @@ bool CrystalStructure::getTransformation(
           bj = j;
         }
       }
-    occ::Vec3 frac_trans =
-        minImage(transformed.col(bi) - frac_pos_b.col(bj));
+    occ::Vec3 frac_trans = transformed.col(bi) - frac_pos_b.col(bj);
 
     // Verify the whole fragment maps onto the target as a set, matching each
     // transformed atom to a distinct target atom of the same element.

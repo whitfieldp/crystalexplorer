@@ -164,9 +164,17 @@ void PairEnergyCalculator::onPairEnergyTaskComplete() {
   if (params.structure) {
     auto *interactions = params.structure->pairInteractions();
     auto *result = load_pair_energy_json(jsonFile);
-    result->setParameters(params);
-    qDebug() << "[SLOT DONE]" << task->baseName() << "model:" << result->objectName();
-    interactions->add(result);
+    if (result) {
+      result->setParameters(params);
+      qDebug() << "[SLOT DONE]" << task->baseName() << "model:" << result->objectName();
+      interactions->add(result);
+    } else {
+      // Malformed or unreadable pair-energy JSON (e.g. OCC failed for this
+      // dimer). Skip it rather than crashing; the task still counts as
+      // processed so the batch can complete.
+      qWarning() << "Skipping pair with no valid energy result:" << task->baseName()
+                 << "(file:" << jsonFile << ")";
+    }
     m_completedTaskCount++;
     if (m_completedTaskCount == m_totalTasks) {
       m_complete = true;
