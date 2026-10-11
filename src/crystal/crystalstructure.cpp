@@ -1486,8 +1486,15 @@ bool CrystalStructure::getTransformation(
   auto nums_a = atomicNumbersForIndices(from);
   auto nums_b = atomicNumbersForIndices(to);
 
-  // first check if they're the same elements
-  if (!(nums_a.array() == nums_b.array()).all())
+  // first check if they're the same elements. Compare as multisets: a space
+  // group operation can permute the atoms, and for Z' > 1 structures the two
+  // fragments are different molecules, so the element at position i of one
+  // need not be the element at position i of the other.
+  auto sorted_a = nums_a;
+  auto sorted_b = nums_b;
+  std::sort(sorted_a.data(), sorted_a.data() + sorted_a.size());
+  std::sort(sorted_b.data(), sorted_b.data() + sorted_b.size());
+  if (!(sorted_a.array() == sorted_b.array()).all())
     return false;
 
   auto pos_a = atomicPositionsForIndices(from);
@@ -1496,25 +1503,64 @@ bool CrystalStructure::getTransformation(
   // Convert positions to fractional coordinates
   auto frac_pos_a = m_crystal.to_fractional(pos_a);
   auto frac_pos_b = m_crystal.to_fractional(pos_b);
-  occ::Vec3 frac_centroid_b = frac_pos_b.rowwise().mean();
+  const int n = frac_pos_a.cols();
 
   const auto &symops = m_crystal.space_group().symmetry_operations();
 
+  // Minimum-image wrapping: two fractional positions that differ by a lattice
+  // vector compare as coincident. Required because fragments may span several
+  // unit cells, so equivalent atoms can be a whole number of cells apart.
+  auto minImage = [](const occ::Vec3 &d) {
+    return (d.array() - d.array().round()).matrix();
+  };
+
   for (const auto &symop : symops) {
-    occ::Mat3N transformed_pos = symop.apply(frac_pos_a);
-    occ::Vec3 frac_centroid_a = transformed_pos.rowwise().mean();
+    occ::Mat3N transformed = symop.apply(frac_pos_a);
 
-    // Calculate the translation between centroids
-    occ::Vec3 frac_trans = frac_centroid_b - frac_centroid_a;
+    // Determine the lattice translation that carries the transformed fragment
+    // onto the target. It is fixed by the best-matching atom pair (the one
+    // with the smallest minimum-image separation) and must then be
+    // consistent for every atom. Using the best pair rather than atom 0
+    // makes this robust to atom permutation and to fragments spanning cells.
+    double best_pair = 1e30;
+    int bi = 0, bj = 0;
+    for (int i = 0; i < n; i++)
+      for (int j = 0; j < n; j++) {
+        double d = minImage(transformed.col(i) - frac_pos_b.col(j)).norm();
+        if (d < best_pair) {
+          best_pair = d;
+          bi = i;
+          bj = j;
+        }
+      }
+    occ::Vec3 frac_trans =
+        minImage(transformed.col(bi) - frac_pos_b.col(bj));
 
-    // Apply the translation
-    transformed_pos.colwise() += frac_trans;
+    // Verify the whole fragment maps onto the target as a set, matching each
+    // transformed atom to a distinct target atom of the same element.
+    std::vector<bool> used(n, false);
+    bool all_match = true;
+    for (int i = 0; i < n && all_match; i++) {
+      double best = 1e30;
+      int matched = -1;
+      for (int j = 0; j < n; j++) {
+        if (used[j] || nums_a(i) != nums_b(j))
+          continue;
+        double d =
+            minImage(transformed.col(i) + frac_trans - frac_pos_b.col(j)).norm();
+        if (d < best) {
+          best = d;
+          matched = j;
+        }
+      }
+      if (matched < 0 || best > 1e-5) {
+        all_match = false;
+        break;
+      }
+      used[matched] = true;
+    }
 
-    // Check if transformed positions match frac_pos_b
-    occ::Mat3N diff = transformed_pos - frac_pos_b;
-    double rmsd = diff.norm() / std::sqrt(diff.size());
-
-    if (rmsd < 1e-6) { // Tighter tolerance for fractional coordinates
+    if (all_match) {
       auto symop_ab = symop.translated(frac_trans);
       qDebug() << QString::fromStdString(symop_ab.to_string());
       // Found a matching symmetry operation
