@@ -90,8 +90,6 @@ Task *WavefunctionCalculator::makeOccTask(wfn::Parameters params) {
   occ::IVec nums = params.structure->atomicNumbersForIndices(idx);
   occ::Mat3N pos = params.structure->atomicPositionsForIndices(idx);
 
-  QString wavefunctionName = generateWavefunctionName(params);
-
   if (params.userEditRequested) {
     params.userInputContents = io::requestUserTextEdit(
         "OCC input", io::getOccWavefunctionJson(params));
@@ -99,7 +97,18 @@ Task *WavefunctionCalculator::makeOccTask(wfn::Parameters params) {
       qInfo() << "Wavefunction calculation canceled by user";
       return nullptr;
     }
+    // The user may have changed the functional and/or basis set in the
+    // model section of the input; read them back so the wavefunction name
+    // and stored parameters reflect the calculation that actually runs.
+    if (!io::updateWfnParametersFromOccJson(params.userInputContents,
+                                            params)) {
+      qWarning() << "Edited OCC input could not be read back; naming the "
+                    "wavefunction with the original method/basis";
+    }
   }
+
+  QString wavefunctionName = generateWavefunctionName(params);
+
   auto *task = new OccWavefunctionTask();
   task->setParameters(params);
   task->setProperty("name", wavefunctionName);

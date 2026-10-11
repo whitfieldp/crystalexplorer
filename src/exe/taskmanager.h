@@ -19,6 +19,8 @@ public:
     void remove(TaskID taskId);
     Task* get(TaskID taskId) const;
 
+    void stopAll();
+
     int numFinished() const;
     int numTasks() const;
 

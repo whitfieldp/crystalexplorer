@@ -68,6 +68,7 @@ public:
 public slots:
   void togglePairInteractionHighlighting(bool);
   void handleBusyStateChange(bool);
+  void onJobCancelClicked();
   void generateSurface(isosurface::Parameters);
   void generateSurfaceRequiringWavefunction(isosurface::Parameters,
                                             wfn::Parameters);

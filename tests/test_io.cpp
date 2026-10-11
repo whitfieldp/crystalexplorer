@@ -8,6 +8,8 @@
 #include "pair_energy_results.h"
 #include "crystalclear.h"
 #include "crystalstructure.h"
+#include "chemicalstructure.h"
+#include "occinput.h"
 #include <QTemporaryFile>
 #include <QFile>
 #include <QDir>
@@ -135,5 +137,83 @@ TEST_CASE("save_pair_energy_json functionality", "[io][pair_energy]") {
 
         bool result = save_pair_energy_json(nullptr, filename);
         REQUIRE_FALSE(result);
+    }
+}
+
+TEST_CASE("updateWfnParametersFromOccJson reads back edited model section",
+          "[io][occinput]") {
+    wfn::Parameters params;
+    params.method = "b3lyp";
+    params.basis = "def2-svp";
+
+    SECTION("Edited method and basis set are picked up") {
+        QString json = R"""(
+{
+  "schema_name": "qcschema_input",
+  "model": {
+    "method": "b3lyp",
+    "basis": "def2-tzvpd"
+  }
+}
+)""";
+        REQUIRE(io::updateWfnParametersFromOccJson(json, params));
+        REQUIRE(params.method == "b3lyp");
+        REQUIRE(params.basis == "def2-tzvpd");
+    }
+
+    SECTION("Missing basis key leaves basis set unchanged") {
+        QString json = R"""(
+{
+  "model": {
+    "method": "wb97m-v"
+  }
+}
+)""";
+        REQUIRE(io::updateWfnParametersFromOccJson(json, params));
+        REQUIRE(params.method == "wb97m-v");
+        REQUIRE(params.basis == "def2-svp");
+    }
+
+    SECTION("Invalid JSON leaves parameters unchanged and returns false") {
+        params.method = "b3lyp";
+        params.basis = "def2-svp";
+        QString json = "not valid json {";
+        REQUIRE_FALSE(io::updateWfnParametersFromOccJson(json, params));
+        REQUIRE(params.method == "b3lyp");
+        REQUIRE(params.basis == "def2-svp");
+    }
+
+    SECTION("JSON without model section returns false") {
+        QString json = R"""(
+{
+  "driver": "energy"
+}
+)""";
+        REQUIRE_FALSE(io::updateWfnParametersFromOccJson(json, params));
+        REQUIRE(params.method == "b3lyp");
+        REQUIRE(params.basis == "def2-svp");
+    }
+
+    SECTION("Round trip: generated input parses back unchanged") {
+        ChemicalStructure structure;
+        std::vector<QString> elements = {"H", "C"};
+        std::vector<occ::Vec3> positions = {
+            occ::Vec3(0.0, 0.0, 0.0),
+            occ::Vec3(1.1, 0.0, 0.0)};
+        structure.setAtoms(elements, positions);
+
+        wfn::Parameters genParams;
+        genParams.structure = &structure;
+        genParams.atoms = {GenericAtomIndex{0, 0, 0, 0},
+                           GenericAtomIndex{0, 1, 0, 0}};
+        genParams.method = "b3lyp";
+        genParams.basis = "def2-tzvpd";
+
+        QString json = io::getOccWavefunctionJson(genParams);
+        REQUIRE(json.contains("def2-tzvpd"));
+        REQUIRE(json.contains("b3lyp"));
+        REQUIRE(io::updateWfnParametersFromOccJson(json, genParams));
+        REQUIRE(genParams.method == "b3lyp");
+        REQUIRE(genParams.basis == "def2-tzvpd");
     }
 }

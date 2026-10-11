@@ -97,7 +97,8 @@ void WavefunctionCalculationDialog::updateMethodOptions() {
 void WavefunctionCalculationDialog::updateBasisSetOptions() {
 
   QStringList basisSets{
-      "def2-svp", "def2-tzvp", "6-31G(d,p)", "DGDZVP", "3-21G", "STO-3G",
+      "def2-svp", "def2-tzvp", "def2-tzvpd", "def2-tzvppd", "6-31G(d,p)",
+      "DGDZVP", "3-21G", "STO-3G",
   };
 
   basisComboBox->clear();

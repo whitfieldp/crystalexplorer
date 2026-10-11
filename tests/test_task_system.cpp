@@ -81,6 +81,29 @@ private:
     QString m_errorMsg;
 };
 
+// Task that records whether stop() was called, and does not finish on its own
+class SlowTask : public Task {
+    Q_OBJECT
+public:
+    explicit SlowTask(QObject *parent = nullptr) : Task(parent) {}
+
+    void start() override {
+        m_running = true;
+        // Deliberately never completes; only stop() clears the running flag.
+    }
+
+    void stop() override {
+        m_stopped = true;
+        m_running = false;
+        emit stopped();
+    }
+
+    bool stopped() const { return m_stopped; }
+
+private:
+    bool m_stopped{false};
+};
+
 // Task that sets error message instead of throwing
 class SoftErrorTask : public Task {
     Q_OBJECT
@@ -455,6 +478,46 @@ TEST_CASE("TaskManager task execution", "[task][manager][execution]") {
         // Should have 2 completions and 1 error
         REQUIRE(completeSpy.count() == 2);
         REQUIRE(errorSpy.count() == 1);
+    }
+}
+
+TEST_CASE("TaskManager stopAll", "[task][manager][stopall]") {
+    TaskManager manager;
+
+    SECTION("Stops running and queued tasks") {
+        QSignalSpy removedSpy(&manager, &TaskManager::taskRemoved);
+
+        // Concurrency 1 => first task runs, the rest queue up.
+        manager.setMaximumConcurrency(1);
+
+        SlowTask *running = new SlowTask();
+        SlowTask *queued1 = new SlowTask();
+        SlowTask *queued2 = new SlowTask();
+
+        manager.add(running, true);
+        manager.add(queued1, true);
+        manager.add(queued2, true);
+
+        REQUIRE(running->isRunning());
+        REQUIRE_FALSE(queued1->isRunning());
+        REQUIRE_FALSE(queued2->isRunning());
+
+        manager.stopAll();
+
+        // Running task received stop(); queued tasks are removed (not started).
+        REQUIRE(running->stopped());
+        REQUIRE(removedSpy.count() == 2);
+        REQUIRE_FALSE(queued1->isRunning());
+        REQUIRE_FALSE(queued2->isRunning());
+    }
+
+    SECTION("Stops nothing when idle") {
+        QSignalSpy removedSpy(&manager, &TaskManager::taskRemoved);
+
+        manager.stopAll();
+
+        REQUIRE(removedSpy.count() == 0);
+        REQUIRE(manager.numTasks() == 0);
     }
 }
 

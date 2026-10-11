@@ -1486,8 +1486,14 @@ bool CrystalStructure::getTransformation(
   auto nums_a = atomicNumbersForIndices(from);
   auto nums_b = atomicNumbersForIndices(to);
 
-  // first check if they're the same elements
-  if (!(nums_a.array() == nums_b.array()).all())
+  // first check if they're the same elements. Compare as multisets: a
+  // symmetry operation can permute the atoms, so the element at position i
+  // of one set need not be the element at position i of the other set.
+  auto sorted_a = nums_a;
+  auto sorted_b = nums_b;
+  std::sort(sorted_a.data(), sorted_a.data() + sorted_a.size());
+  std::sort(sorted_b.data(), sorted_b.data() + sorted_b.size());
+  if (!(sorted_a.array() == sorted_b.array()).all())
     return false;
 
   auto pos_a = atomicPositionsForIndices(from);
@@ -1510,11 +1516,33 @@ bool CrystalStructure::getTransformation(
     // Apply the translation
     transformed_pos.colwise() += frac_trans;
 
-    // Check if transformed positions match frac_pos_b
-    occ::Mat3N diff = transformed_pos - frac_pos_b;
-    double rmsd = diff.norm() / std::sqrt(diff.size());
+    // Check that the transformed positions match frac_pos_b as a set. A
+    // symmetry operation permutes the atoms, so transformed atom i need not
+    // correspond to target atom i: match each transformed atom to a distinct
+    // target atom of the same element within tolerance.
+    const int n = transformed_pos.cols();
+    std::vector<bool> used(n, false);
+    bool match_found = true;
+    for (int i = 0; i < n && match_found; i++) {
+      double best_dist = 1e30;
+      int best_j = -1;
+      for (int j = 0; j < n; j++) {
+        if (used[j] || nums_a(i) != nums_b(j))
+          continue;
+        double dist = (transformed_pos.col(i) - frac_pos_b.col(j)).norm();
+        if (dist < best_dist) {
+          best_dist = dist;
+          best_j = j;
+        }
+      }
+      if (best_j < 0 || best_dist > 1e-5) {
+        match_found = false;
+        break;
+      }
+      used[best_j] = true;
+    }
 
-    if (rmsd < 1e-6) { // Tighter tolerance for fractional coordinates
+    if (match_found) {
       auto symop_ab = symop.translated(frac_trans);
       qDebug() << QString::fromStdString(symop_ab.to_string());
       // Found a matching symmetry operation

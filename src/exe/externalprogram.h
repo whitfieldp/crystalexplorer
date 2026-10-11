@@ -3,6 +3,7 @@
 #include "filedependency.h"
 #include "chemicalstructure.h"
 #include <QString>
+#include <atomic>
 #include <occ/core/molecule.h>
 #include <ankerl/unordered_dense.h>
 
@@ -98,6 +99,7 @@ private:
     int m_timeIncrement{100};
     bool m_deleteWorkingFiles{false};
     QProcessEnvironment m_environment;
+    std::atomic<bool> m_stopRequested{false};
 
     FileDependencyList m_requirements;
     FileDependencyList m_outputs;

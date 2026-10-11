@@ -206,6 +206,16 @@ bool ExternalProgramTask::runExternalProgram(std::function<void(int, QString)> p
     int timeTaken = 0;
 
     while (!process.waitForFinished(m_timeIncrement)) {
+      // stop() may have been requested on another thread; escalate from a
+      // graceful terminate to a hard kill so the worker loop can exit and
+      // no orphaned process is left behind.
+      if (m_stopRequested) {
+        process.kill();
+        process.waitForFinished(1000);
+        setErrorMessage("Task stopped by user");
+        progress(100, "Task stopped");
+        return false;
+      }
       timeTaken += m_timeIncrement;
       updateStdoutStderr(process);
       progress(timeTaken / m_timeIncrement,
@@ -285,7 +295,10 @@ void ExternalProgramTask::start() {
   Task::run(taskLogic);
 }
 
-void ExternalProgramTask::stop() { emit stopProcess(); }
+void ExternalProgramTask::stop() {
+  m_stopRequested = true;
+  emit stopProcess();
+}
 
 void ExternalProgramTask::setEnvironment(const QProcessEnvironment &env) {
   m_environment = env;

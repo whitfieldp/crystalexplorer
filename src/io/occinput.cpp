@@ -37,4 +37,25 @@ QString getOccWavefunctionJson(const wfn::Parameters &params) {
   return QString::fromStdString(root.dump(2));
 }
 
+bool updateWfnParametersFromOccJson(const QString &json,
+                                    wfn::Parameters &params) {
+  nlohmann::json doc =
+      nlohmann::json::parse(json.toStdString(), nullptr, false);
+  if (doc.is_discarded() || !doc.contains("model") ||
+      !doc["model"].is_object()) {
+    qWarning()
+        << "Edited OCC input has no parseable model section; keeping "
+           "original method and basis set";
+    return false;
+  }
+  const auto &model = doc["model"];
+  if (model.contains("method") && model["method"].is_string()) {
+    params.method = QString::fromStdString(model["method"].get<std::string>());
+  }
+  if (model.contains("basis") && model["basis"].is_string()) {
+    params.basis = QString::fromStdString(model["basis"].get<std::string>());
+  }
+  return true;
+}
+
 } // namespace io

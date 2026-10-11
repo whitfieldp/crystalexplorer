@@ -91,6 +91,9 @@ void Crystalx::initStatusBar() {
   statusBar()->addPermanentWidget(_jobCancel);
   _jobProgress->setVisible(false);
   _jobCancel->setVisible(false);
+
+  connect(_jobCancel, &QToolButton::clicked, this,
+          &Crystalx::onJobCancelClicked);
 }
 
 bool Crystalx::readElementData() {
@@ -1083,6 +1086,12 @@ void Crystalx::processPdb(QString &filename) {
 }
 
 void Crystalx::handleBusyStateChange(bool busy) { setBusy(busy); }
+
+void Crystalx::onJobCancelClicked() {
+  if (m_taskManager) {
+    m_taskManager->stopAll();
+  }
+}
 
 void Crystalx::jobRunning() { setBusy(true); }
 
@@ -2394,16 +2403,27 @@ void Crystalx::calculatePairEnergiesWithExistingWavefunctions(
   std::vector<MolecularWavefunction *> wavefunctions;
   for (const auto &wfn : modelParameters.wavefunctions) {
     auto candidates = structure->wavefunctionsAndTransformsForAtoms(wfn.atoms);
-    bool found = false;
     qDebug() << "Found " << candidates.size() << "candidates";
+    MolecularWavefunction *selected = nullptr;
     for (auto &candidate : candidates) {
       if (wfn.hasEquivalentMethodTo(candidate.wavefunction->parameters())) {
-        found = true;
-        wavefunctions.push_back(candidate.wavefunction);
+        selected = candidate.wavefunction;
         break;
       }
     }
-    if (!found) {
+    if (!selected && !candidates.empty()) {
+      // No wavefunction with the requested method/basis for these atoms.
+      // Fall back to the most recently generated one - this happens when
+      // the user edited the method/basis set in the wavefunction input
+      // file, since the stored parameters then differ from the request.
+      qDebug() << "No wavefunction matching the requested method/basis; "
+                  "using the most recently generated wavefunction for these "
+                  "atoms";
+      selected = candidates.back().wavefunction;
+    }
+    if (selected) {
+      wavefunctions.push_back(selected);
+    } else {
       qDebug() << "Unable to find corresponding wavefunction...";
     }
   }

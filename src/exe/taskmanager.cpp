@@ -73,6 +73,33 @@ Task *TaskManager::get(TaskID taskId) const {
   return m_tasks.value(taskId, nullptr);
 }
 
+void TaskManager::stopAll() {
+  // Stop every running task. Each one decrements m_currentConcurrentTasks
+  // via handleTaskError as its worker finishes.
+  for (Task *task : m_tasks) {
+    if (task->isRunning()) {
+      task->stop();
+    }
+  }
+
+  // Cancel queued (pending) tasks. Do not call remove() here because it
+  // would trigger startNextTask() and relaunch queued work.
+  QList<TaskID> pending = m_pendingTasks.toList();
+  m_pendingTasks.clear();
+  for (const TaskID &id : pending) {
+    Task *task = m_tasks.take(id);
+    if (!task)
+      continue;
+    m_taskCount--;
+    emit taskRemoved(id);
+    task->deleteLater();
+  }
+
+  if (m_currentConcurrentTasks == 0) {
+    emit busyStateChanged(false);
+  }
+}
+
 void TaskManager::handleTaskComplete(TaskID id) {
   Task *task = get(id);
   if (task) {

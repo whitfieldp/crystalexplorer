@@ -57,3 +57,7 @@ add_executable(test_task_system
     "${CMAKE_CURRENT_SOURCE_DIR}/test_main.cpp")
 target_link_libraries(test_task_system PRIVATE cx_exe Catch2::Catch2 Qt6::Core Qt6::Test)
 catch_discover_tests(test_task_system)
+
+# Standalone headless reproduction harness (not a Catch2 test)
+add_executable(pair_energy_repro "${CMAKE_CURRENT_SOURCE_DIR}/pair_energy_repro.cpp")
+target_link_libraries(pair_energy_repro PRIVATE cx_core cx_crystal cx_io)
