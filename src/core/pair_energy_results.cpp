@@ -33,6 +33,30 @@ QVariant PairInteraction::getMetadata(const QString &c) const {
 
 QString PairInteraction::interactionModel() const { return m_interactionModel; }
 
+QString PairInteraction::displayModel() const {
+  if (m_interactionModel.isEmpty())
+    return QString();
+  if (!m_parameters.wfnA)
+    return m_interactionModel;
+
+  const QString &method = m_parameters.wfnA->parameters().method;
+  const QString &basis = m_parameters.wfnA->parameters().basis;
+
+  if (method.trimmed().isEmpty() && basis.trimmed().isEmpty())
+    return m_interactionModel;
+
+  QString label = m_interactionModel;
+  if (!method.trimmed().isEmpty()) {
+    label += " (" + method;
+    if (!basis.trimmed().isEmpty())
+      label += "/" + basis;
+    label += ")";
+  } else {
+    label += " (" + basis + ")";
+  }
+  return label;
+}
+
 void PairInteraction::setParameters(const pair_energy::Parameters &params) {
   m_parameters = params;
 }

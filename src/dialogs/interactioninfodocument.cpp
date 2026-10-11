@@ -119,12 +119,22 @@ void InteractionInfoDocument::updateContent() {
 
   for (const QString &model : sortedModels) {
     setupTableForModel(model);
-    m_models[model]->setInteractionData(interactions->filterByModel(model));
-    m_models[model]->setTitle(model);
-    
+    auto modelData = interactions->filterByModel(model);
+    m_models[model]->setInteractionData(modelData);
+
+    // Use the first interaction's display label (model + wavefunction
+    // method/basis) for the tab title; fall back to the model name if no
+    // interaction carries parameters yet.
+    QString title = model;
+    if (!modelData.empty()) {
+      title = modelData.begin()->second->displayModel();
+    }
+
+    m_models[model]->setTitle(title);
+
     // Add the combined widget (table + citations) to the tab
     QWidget *combinedWidget = createTableWithCitations(model);
-    m_tabWidget->addTab(combinedWidget, model);
+    m_tabWidget->addTab(combinedWidget, title);
   }
 
   if (m_tabWidget->count() > 0) {

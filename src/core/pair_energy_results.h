@@ -17,6 +17,9 @@ public:
   explicit PairInteraction(const QString &interactionModel,
                            QObject *parent = nullptr);
   QString interactionModel() const;
+  // Interaction model label for display: the model name with the actual
+  // wavefunction method/basis appended, e.g. "CE-1p (B3LYP/def2-tzvpd)".
+  QString displayModel() const;
   void addComponent(const QString &component, double value);
   inline const auto &components() const { return m_components; }
   double getComponent(const QString &) const;

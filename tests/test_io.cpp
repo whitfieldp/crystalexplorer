@@ -10,6 +10,7 @@
 #include "crystalstructure.h"
 #include "chemicalstructure.h"
 #include "occinput.h"
+#include "wavefunction_parameters.h"
 #include <QTemporaryFile>
 #include <QFile>
 #include <QDir>
@@ -215,5 +216,89 @@ TEST_CASE("updateWfnParametersFromOccJson reads back edited model section",
         REQUIRE(io::updateWfnParametersFromOccJson(json, genParams));
         REQUIRE(genParams.method == "b3lyp");
         REQUIRE(genParams.basis == "def2-tzvpd");
+    }
+}
+
+TEST_CASE("wfn::methodBasisFromDescription parses method/basis strings",
+          "[core][wfn][description]") {
+    SECTION("Standard method/basis") {
+        QString method, basis;
+        REQUIRE(wfn::methodBasisFromDescription("B3LYP/def2-tzvpd",
+                                                method, basis));
+        REQUIRE(method == "B3LYP");
+        REQUIRE(basis == "def2-tzvpd");
+    }
+
+    SECTION("Method with a slash in the name (split on last slash)") {
+        QString method, basis;
+        REQUIRE(wfn::methodBasisFromDescription("M06-2X/def2-tzvppd",
+                                                method, basis));
+        REQUIRE(method == "M06-2X");
+        REQUIRE(basis == "def2-tzvppd");
+    }
+
+    SECTION("No slash: whole string is the method, empty basis") {
+        QString method, basis;
+        REQUIRE(wfn::methodBasisFromDescription("GFN2-xTB", method, basis));
+        REQUIRE(method == "GFN2-xTB");
+        REQUIRE(basis.isEmpty());
+    }
+
+    SECTION("Empty description returns false") {
+        QString method, basis;
+        REQUIRE_FALSE(wfn::methodBasisFromDescription("   ", method, basis));
+    }
+}
+
+TEST_CASE("PairInteraction displayModel appends wavefunction method/basis",
+          "[core][pair_interaction][display_model]") {
+    SECTION("Appends method and basis from the A wavefunction") {
+        auto *wfnA = new MolecularWavefunction();
+        wfn::Parameters p;
+        p.method = "B3LYP";
+        p.basis = "def2-tzvpd";
+        wfnA->setParameters(p);
+
+        auto *interaction = new PairInteraction("CE-1p");
+        pair_energy::Parameters params;
+        params.model = "ce-1p";
+        params.wfnA = wfnA;
+        interaction->setParameters(params);
+
+        REQUIRE(interaction->displayModel() == "CE-1p (B3LYP/def2-tzvpd)");
+        // Canonical model string is unchanged (used for matching/citations).
+        REQUIRE(interaction->interactionModel() == "CE-1p");
+
+        delete interaction;
+        delete wfnA;
+    }
+
+    SECTION("Method only (no basis)") {
+        auto *wfnA = new MolecularWavefunction();
+        wfn::Parameters p;
+        p.method = "GFN2-xTB";
+        p.basis = "";
+        wfnA->setParameters(p);
+
+        auto *interaction = new PairInteraction("GFN2-xTB");
+        pair_energy::Parameters params;
+        params.model = "gfn2-xtb";
+        params.wfnA = wfnA;
+        interaction->setParameters(params);
+
+        REQUIRE(interaction->displayModel() == "GFN2-xTB (GFN2-xTB)");
+        delete interaction;
+        delete wfnA;
+    }
+
+    SECTION("No wavefunction falls back to the plain model name") {
+        auto *interaction = new PairInteraction("CE-1p");
+        pair_energy::Parameters params;
+        params.model = "ce-1p";
+        params.wfnA = nullptr;
+        interaction->setParameters(params);
+
+        REQUIRE(interaction->displayModel() == "CE-1p");
+        delete interaction;
     }
 }
