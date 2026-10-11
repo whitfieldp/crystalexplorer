@@ -2504,14 +2504,17 @@ void Crystalx::calculatePairEnergies(
   qDebug() << "Model" << modelParameters.model;
 
   std::vector<wfn::Parameters> wavefunctionsToCalculate;
+  // Ask the user for the method/basis of every wavefunction that is not yet
+  // accepted. In particular, when generating new wavefunctions we must prompt
+  // for *each* distinct molecule (e.g. a Z' > 1 structure with several
+  // symmetry-unique molecules) rather than only the first one.
   for (auto &wfn : modelParameters.wavefunctions) {
     if (!wfn.accepted) {
       wfn = Crystalx::getWavefunctionParametersFromUser(wfn.atoms, wfn.charge,
-                                                        wfn.multiplicity);
+                                                         wfn.multiplicity);
     }
     if (!wfn.accepted)
       return;
-    break;
   }
 
   for (auto &wfn : modelParameters.wavefunctions) {
