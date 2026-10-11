@@ -26,6 +26,14 @@ CrystalExplorer has undergone significant improvements with several major update
 The software is under active development, with ongoing work to stabilize the new features and implementations.
 Project file serialization has been improved with better support for interaction energies, wavefunctions, and bond overrides.
 
+### Development notes
+
+Recent changes (assisted by the Qwen3.8-27B model) include:
+
+- **Pair interaction detection for symmetry-related molecules.** `CrystalStructure::getTransformation` now compares atoms by element multiset and matches positions as a set rather than assuming an identity permutation, so pair energies are correctly computed for molecules related by space-group symmetry operations (e.g. `Z' > 1` structures).
+- **Reliable job cancellation.** The status-bar cancel (X) button is now wired to `TaskManager::stopAll()`, which stops running tasks and discards queued work. `ExternalProgramTask::stop()` escalates to a hard kill of the child process, so no orphaned calculations are left behind.
+- **Stable wavefunction naming.** `io::updateWfnParametersFromOccJson` reads the edited model back before naming OCC tasks, preventing stale wavefunction names from being reused. `def2-tzvpd` / `def2-tzvppd` basis sets are available in the wavefunction dialog.
+
 ## Build Instructions
 
 Building CrystalExplorer requires:
