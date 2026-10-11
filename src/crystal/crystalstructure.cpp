@@ -1519,8 +1519,14 @@ bool CrystalStructure::getTransformation(
     // Check that the transformed positions match frac_pos_b as a set. A
     // symmetry operation permutes the atoms, so transformed atom i need not
     // correspond to target atom i: match each transformed atom to a distinct
-    // target atom of the same element within tolerance.
+    // target atom of the same element within tolerance. Distances are taken in
+    // the periodic (minimum-image) sense, since equivalent atoms related by a
+    // lattice translation differ by a whole number of unit cells in fractional
+    // space and would otherwise be ~1 apart rather than ~0.
     const int n = transformed_pos.cols();
+    auto minImage = [](const occ::Vec3 &d) {
+      return (d.array() - d.array().round()).matrix();
+    };
     std::vector<bool> used(n, false);
     bool match_found = true;
     for (int i = 0; i < n && match_found; i++) {
@@ -1529,7 +1535,7 @@ bool CrystalStructure::getTransformation(
       for (int j = 0; j < n; j++) {
         if (used[j] || nums_a(i) != nums_b(j))
           continue;
-        double dist = (transformed_pos.col(i) - frac_pos_b.col(j)).norm();
+        double dist = minImage(transformed_pos.col(i) - frac_pos_b.col(j)).norm();
         if (dist < best_dist) {
           best_dist = dist;
           best_j = j;
