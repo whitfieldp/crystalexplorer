@@ -1505,6 +1505,86 @@ bool CrystalStructure::getTransformation(
   auto frac_pos_b = m_crystal.to_fractional(pos_b);
   const int n = frac_pos_a.cols();
 
+  // Preferred path: derive the transformation from the space-group symmetry
+  // relationship already stored on each molecule, rather than re-deriving it
+  // by atom-matching. Every atom of a molecule carries the integer-encoded
+  // SymmetryOperation that mapped its parent asymmetric-unit atom onto it
+  // (`asymmetric_unit_symop`), so the relationship between two copies of the
+  // same molecule type is exactly `symop_to * symop_from.inverted()`. This is
+  // O(1), cannot be fooled by molecules scattered across cells, and correctly
+  // distinguishes the distinct conformers of a Z' > 1 structure (which have
+  // different asymmetric_molecule_idx and are NOT symmetry-related).
+  //
+  // Find the source and target molecules by matching the set of their
+  // unit-cell atom indices (the `unique` field of GenericAtomIndex).
+  const auto &ucMols = m_crystal.unit_cell_molecules();
+  auto molByUcIdxSet = [&](const std::vector<GenericAtomIndex> &idxs,
+                           const occ::core::Molecule *&out) -> bool {
+    out = nullptr;
+    ankerl::unordered_dense::set<int> wanted;
+    for (const auto &g : idxs)
+      wanted.insert(g.unique);
+    for (const auto &m : ucMols) {
+      const auto &u = m.unit_cell_idx();
+      if (static_cast<int>(u.rows()) != static_cast<int>(idxs.size()))
+        continue;
+      bool same = true;
+      for (int i = 0; i < u.rows(); i++)
+        if (!wanted.count(u(i))) {
+          same = false;
+          break;
+        }
+      if (same) {
+        out = &m;
+        return true;
+      }
+    }
+    return false;
+  };
+  const occ::core::Molecule *mol_a = nullptr, *mol_b = nullptr;
+  if (molByUcIdxSet(from, mol_a) && molByUcIdxSet(to, mol_b)) {
+    // Only copies of the SAME molecule type are symmetry-related. Different
+    // types (e.g. the two conformers of a Z' > 1 asymmetric unit) must not
+    // be matched.
+    if (mol_a->asymmetric_molecule_idx() == mol_b->asymmetric_molecule_idx()) {
+      occ::crystal::SymmetryOperation sA(mol_a->asymmetric_unit_symop()(0));
+      occ::crystal::SymmetryOperation sB(mol_b->asymmetric_unit_symop()(0));
+      auto sAB = sB * sA.inverted();
+
+      // The fractional translation is the difference between the target
+      // centroid and the source centroid carried by sAB. Using the raw
+      // (unwrapped) difference preserves the actual cell offset, which can be
+      // several lattice vectors away; SymmetryOperation::translated would wrap
+      // it into [0,1) and lose that offset.
+      occ::Vec3 vAB = frac_pos_b.rowwise().mean() -
+                      sAB(frac_pos_a).rowwise().mean();
+
+      // Add vAB to the existing translation (do not replace it): sAB already
+      // carries the symop's own fractional translation (e.g. the 1/2 offset of
+      // a glide/inversion), and vAB is the residual lattice offset on top of
+      // that. SymmetryOperation::translated does exactly this, but wraps the
+      // result into [0,1); we want the raw sum so far-cell offsets are kept.
+      occ::Mat4 seitz = sAB.seitz();
+      seitz.block<3, 1>(0, 3) += vAB;
+      occ::crystal::SymmetryOperation sAbs(seitz);
+      qDebug() << QString::fromStdString(sAbs.to_string());
+
+      Eigen::Matrix3d cart_rot = m_crystal.unit_cell().direct() *
+                                 sAbs.rotation() *
+                                 m_crystal.unit_cell().inverse();
+      Eigen::Vector3d cart_trans =
+          m_crystal.to_cartesian(sAbs.translation());
+
+      result = Eigen::Isometry3d::Identity();
+      result.linear() = cart_rot;
+      result.translation() = cart_trans;
+      return true;
+    }
+  }
+
+  // Fallback: atom-matching search over every space-group operation. Used when
+  // the fragment indices do not correspond to a stored unit-cell molecule
+  // (e.g. fragments assembled from atoms outside the unit cell).
   const auto &symops = m_crystal.space_group().symmetry_operations();
 
   // Minimum-image wrapping: two fractional positions that differ by a lattice
@@ -1520,15 +1600,7 @@ bool CrystalStructure::getTransformation(
     // Determine the lattice translation that carries the transformed fragment
     // onto the target. It is fixed by the best-matching atom pair (the one
     // with the smallest minimum-image separation) and must then be
-    // consistent for every atom. Using the best pair rather than atom 0
-    // makes this robust to atom permutation and to fragments spanning cells.
-    //
-    // The best-pair *search* uses minimum-image distances so that equivalent
-    // atoms a whole cell apart still match. But the translation itself must
-    // be the RAW (unwrapped) difference for that pair: the wavefunction is
-    // written at its original asymmetric-unit position and OCC applies this
-    // translation to place it, so we need the actual cell offset (which can
-    // be several lattice vectors away), not its minimum-image representative.
+    // consistent for every atom.
     double best_pair = 1e30;
     int bi = 0, bj = 0;
     for (int i = 0; i < n; i++)
@@ -1569,8 +1641,6 @@ bool CrystalStructure::getTransformation(
     if (all_match) {
       auto symop_ab = symop.translated(frac_trans);
       qDebug() << QString::fromStdString(symop_ab.to_string());
-      // Found a matching symmetry operation
-      // Convert back to Cartesian for the result
       Eigen::Matrix3d cart_rot = m_crystal.unit_cell().direct() *
                                  symop_ab.rotation() *
                                  m_crystal.unit_cell().inverse();
