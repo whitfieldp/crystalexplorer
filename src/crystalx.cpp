@@ -1,6 +1,8 @@
 #include <QAction>
+#include <QCheckBox>
 #include <QCloseEvent>
 #include <QDesktopServices>
+#include <QDir>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFileDialog>
@@ -27,6 +29,7 @@
 #include "elementdata.h"
 #include "gltf_exporter.h"
 #include "isosurface_calculator.h"
+#include "io_utilities.h"
 #include "load_wavefunction.h"
 #include "mathconstants.h"
 #include "crystalclear.h"
@@ -424,6 +427,10 @@ void Crystalx::initMenuConnections() {
           &Crystalx::saveProjectAs);
   connect(preferencesAction, &QAction::triggered, this,
           &Crystalx::showPreferencesDialog);
+  connect(clearStructuresAction, &QAction::triggered, this,
+          &Crystalx::clearStructuresAndWavefunctions);
+  connect(deleteOutputFilesAction, &QAction::triggered, this,
+          &Crystalx::deleteOutputFiles);
 
   // Import menu
   connect(importElasticTensorAction, &QAction::triggered, this,
@@ -692,6 +699,86 @@ void Crystalx::toggleAnimation(bool animate) {
 void Crystalx::clearCurrent() { project->deleteCurrentStructure(); }
 
 void Crystalx::clearAll() { project->deleteAllStructures(); }
+
+// File extensions / patterns produced by the external calculation backends
+// (OCC, ORCA, XTB) and the surface generator. These are the transient "output
+// files" that accumulate in the working directory during an analysis. The set
+// mirrors the "output files" section of the repository's .gitignore plus the
+// ORCA/pair-energy artifacts, so nothing that is an input (CIF, PDB, XYZ) or a
+// saved project (.cxp/.cxs/.cxc) is ever matched.
+static const QStringList OUTPUT_FILE_PATTERNS = {
+    // OCC wavefunction + pair-energy scratch/results
+    "*.owf.json",
+    "*_energies.json",
+    // ORCA wavefunction results
+    "*.gbw",
+    "*.orca.json",
+    "*.property.txt",
+    "*.molden",
+    // XTB results
+    "*.xtbout.json",
+    "*_properties.txt",
+    "*.coord",
+    // Surface / isosurface meshes
+    "surface*.ply",
+};
+
+// Enumerate the calculation output files present in the working directory
+// (the directory the app chdir's to when a structure is loaded, see
+// updateWorkingDirectories). Returns full paths.
+QStringList Crystalx::findOutputFiles() const {
+  QDir dir(QDir::currentPath());
+  QStringList files;
+  for (const QString &pattern : OUTPUT_FILE_PATTERNS) {
+    const QStringList matches =
+        dir.entryList({pattern}, QDir::Files, QDir::Name);
+    for (const QString &name : matches)
+      files.append(dir.absoluteFilePath(name));
+  }
+  std::sort(files.begin(), files.end());
+  files.removeDuplicates();
+  return files;
+}
+
+void Crystalx::clearStructuresAndWavefunctions() {
+  if (project->numberOfCrystals() == 0)
+    return;
+  if (!ConfirmationBox::getConfirmation(
+          "Remove all loaded structures and the wavefunctions computed for "
+          "them?<br>This cannot be undone."))
+    return;
+  glWindow->pauseRendering();
+  project->deleteAllStructures();
+  if (childPropertyController)
+    childPropertyController->reset();
+  glWindow->setCurrentCrystal(project);
+  glWindow->resumeRendering();
+}
+
+void Crystalx::deleteOutputFiles() {
+  const QStringList files = findOutputFiles();
+  if (files.isEmpty()) {
+    showStatusMessage("No output files found in the working directory.");
+    return;
+  }
+  // Show exactly what will be removed so the user can confirm there is nothing
+  // unexpected (e.g. a validation file they want to keep).
+  QString list;
+  for (const QString &f : files)
+    list += QString("<li>%1</li>").arg(QDir::toNativeSeparators(f));
+  const QString msg = QString(
+                          "Delete the following %1 calculation output file(s) "
+                          "in<br>%2?<br><ul>%3</ul>")
+                          .arg(files.size())
+                          .arg(QDir::toNativeSeparators(QDir::currentPath()))
+                          .arg(list);
+  if (!ConfirmationBox::getConfirmation(msg))
+    return;
+  const bool ok = io::deleteFiles(files);
+  showStatusMessage(ok ? "Deleted " + QString::number(files.size()) +
+                             " output file(s)."
+                       : "Some output files could not be deleted.");
+}
 
 void Crystalx::generateSlab() {
   Q_ASSERT(project->currentScene());
@@ -2113,6 +2200,36 @@ bool Crystalx::closeProjectConfirmed() {
 void Crystalx::quit() {
   settings::writeSetting(settings::keys::MAIN_WINDOW_SIZE, this->size());
   if (closeProjectConfirmed()) {
+    // Offer to clean up the calculation output files before exiting. Skipped
+    // silently when there is nothing to delete or when the user has opted out
+    // of the prompt.
+    const bool promptEnabled = settings::readSetting(
+        settings::keys::PROMPT_DELETE_OUTPUT_ON_EXIT)
+                                    .toBool();
+    if (promptEnabled) {
+      const QStringList files = findOutputFiles();
+      if (!files.isEmpty()) {
+        QMessageBox box;
+        box.setIcon(QMessageBox::Question);
+        box.setTextFormat(Qt::RichText);
+        box.setText("Delete the " + QString::number(files.size()) +
+                    " calculation output file(s) in the working directory?");
+        box.setInformativeText(
+            "These are the wavefunction, energy and surface files produced "
+            "during your analysis. They can be regenerated.");
+        box.setStandardButtons(QMessageBox::Yes | QMessageBox::No);
+        box.setDefaultButton(QMessageBox::No);
+        auto *dontAsk = new QCheckBox("Don't ask again", &box);
+        dontAsk->setChecked(false);
+        box.setCheckBox(dontAsk);
+        const int ret = box.exec();
+        if (dontAsk->isChecked())
+          settings::writeSetting(settings::keys::PROMPT_DELETE_OUTPUT_ON_EXIT,
+                                 false);
+        if (ret == QMessageBox::Yes)
+          io::deleteFiles(files);
+      }
+    }
     QApplication::exit(0);
   }
 }

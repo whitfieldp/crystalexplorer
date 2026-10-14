@@ -60,7 +60,10 @@
     <addaction name="actionExport_As"/>
     <addaction name="quickExportAction"/>
     <addaction name="exportToGLTFAction"/>
-   </widget>
+    <addaction name="separator"/>
+    <addaction name="clearStructuresAction"/>
+    <addaction name="deleteOutputFilesAction"/>
+    </widget>
    <widget class="QMenu" name="sceneMenu">
     <property name="title">
      <string>Scene</string>
@@ -1254,18 +1257,34 @@
     <enum>QAction::MenuRole::TextHeuristicRole</enum>
    </property>
   </action>
-  <action name="exportToGLTFAction">
-   <property name="text">
-    <string>Export to GLTF...</string>
-   </property>
-   <property name="statusTip">
-    <string>Export current structure to GLTF format for 3D applications</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Shift+G</string>
-   </property>
-  </action>
- </widget>
+   <action name="exportToGLTFAction">
+    <property name="text">
+     <string>Export to GLTF...</string>
+    </property>
+    <property name="statusTip">
+     <string>Export current structure to GLTF format for 3D applications</string>
+    </property>
+    <property name="shortcut">
+     <string>Ctrl+Shift+G</string>
+    </property>
+   </action>
+   <action name="clearStructuresAction">
+    <property name="text">
+     <string>Clear Structures and Wavefunctions</string>
+    </property>
+    <property name="toolTip">
+     <string>Remove all loaded structures and the wavefunctions computed for them</string>
+    </property>
+   </action>
+   <action name="deleteOutputFilesAction">
+    <property name="text">
+     <string>Delete Output Files...</string>
+    </property>
+    <property name="toolTip">
+     <string>Delete the wavefunction, energy and surface files produced by calculations in the working directory</string>
+    </property>
+   </action>
+  </widget>
  <resources>
   <include location="../icons/crystalexplorer.qrc"/>
  </resources>

@@ -126,6 +126,8 @@ private slots:
   void toggleDrawHydrogenEllipsoids(bool);
   void updateMenuOptionsForScene();
   void newProject();
+  void clearStructuresAndWavefunctions();
+  void deleteOutputFiles();
   void saveProject();
   void saveProjectAs();
   void exportAs();
@@ -207,6 +209,7 @@ private:
   void loadProject(QString);
   void updateRecentFileActions(QStringList);
   void updateWorkingDirectories(const QString &);
+  QStringList findOutputFiles() const;
   void processCif(QString &);
   void processPdb(QString &);
   void loadXyzFile(const QString &);

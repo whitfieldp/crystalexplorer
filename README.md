@@ -30,6 +30,10 @@ Project file serialization has been improved with better support for interaction
 
 Recent changes (assisted by the Qwen3.8-27B model) include:
 
+- **Workspace cleanup tools.** Three new `File` menu items manage the working state and the files an analysis produces:
+  - *Clear Structures and Wavefunctions* removes all loaded structures and the wavefunctions computed for them (wavefunctions are stored as children of their structure, so they are removed together).
+  - *Delete Output Files…* lists and deletes the wavefunction, energy and surface files written to the working directory by the external calculation backends (OCC, ORCA, XTB). The confirmation dialog shows exactly which files will be removed; inputs (CIF/PDB/XYZ), saved projects and other files are never matched.
+  - On exit, CrystalExplorer offers to delete those same output files, with a *Don't ask again* option to disable the prompt.
 - **Pair interaction detection for symmetry-related molecules.** `CrystalStructure::getTransformation` derives the inter-molecular transform from the space-group relationship already stored on each molecule (`symop_to * symop_from.inverted()`) rather than re-deriving it by atom-matching, and uses the raw (unwrapped) centroid residual so molecules several lattice cells apart are placed correctly. Pair energies are now correct for molecules related by space-group symmetry operations (e.g. `Z' > 1` structures with distinct conformers) and for far-cell dimers.
 - **Robust pair-energy JSON parsing.** `io::load_pair_energy_json` catches the full `nlohmann::json::exception` family, validates the interaction-energy object, and skips non-numeric components instead of aborting the whole calculation on a malformed OCC result.
 - **Reliable job cancellation.** The status-bar cancel (X) button is now wired to `TaskManager::stopAll()`, which stops running tasks and discards queued work. `ExternalProgramTask::stop()` escalates to a hard kill of the child process, so no orphaned calculations are left behind.

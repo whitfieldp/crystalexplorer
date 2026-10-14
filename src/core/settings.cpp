@@ -35,6 +35,7 @@ static const QMap<QString, QVariant> defaults{
     {keys::USE_JMOL_COLORS, false},
     {keys::DELETE_WORKING_FILES, true},
     {keys::AUTOLOAD_LAST_FILE, false},
+    {keys::PROMPT_DELETE_OUTPUT_ON_EXIT, true},
     {keys::BACKGROUND_COLOR, "white"},
     {keys::NONE_PROPERTY_COLOR, "#e6cdcd"}, // string rep of rgb, 230,205,0
     {keys::ATOM_LABEL_COLOR, "black"},

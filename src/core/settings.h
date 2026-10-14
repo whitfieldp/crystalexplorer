@@ -89,6 +89,7 @@ const QString ELEMENTDATA_FILE = "elementdataFile";
 const QString DOCUMENTATION = "documentation";
 const QString DELETE_WORKING_FILES = "deleteWorkingFiles";
 const QString AUTOLOAD_LAST_FILE = "autoLoadLastFile";
+const QString PROMPT_DELETE_OUTPUT_ON_EXIT = "promptDeleteOutputOnExit";
 const QString FILE_HISTORY_LIST = "fileHistoryList";
 const QString BACKGROUND_COLOR = "backgroundColor";
 const QString NONE_PROPERTY_COLOR = "nonePropertyColor";
