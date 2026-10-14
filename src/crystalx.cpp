@@ -761,17 +761,13 @@ void Crystalx::deleteOutputFiles() {
     showStatusMessage("No output files found in the working directory.");
     return;
   }
-  // Show exactly what will be removed so the user can confirm there is nothing
-  // unexpected (e.g. a validation file they want to keep).
-  QString list;
-  for (const QString &f : files)
-    list += QString("<li>%1</li>").arg(QDir::toNativeSeparators(f));
+  // Summarise what will be removed (count + directory) rather than listing
+  // every file, which can number in the hundreds and is not useful to read.
   const QString msg = QString(
-                          "Delete the following %1 calculation output file(s) "
-                          "in<br>%2?<br><ul>%3</ul>")
+                          "Delete the %1 calculation output file(s) in the "
+                          "working directory?<br>%2")
                           .arg(files.size())
-                          .arg(QDir::toNativeSeparators(QDir::currentPath()))
-                          .arg(list);
+                          .arg(QDir::toNativeSeparators(QDir::currentPath()));
   if (!ConfirmationBox::getConfirmation(msg))
     return;
   const bool ok = io::deleteFiles(files);
